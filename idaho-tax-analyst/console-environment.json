@@ -1,0 +1,42 @@
+{
+  "name": "idaho-tax-analyst-env",
+  "config": {
+    "type": "cloud",
+    "networking": {
+      "type": "limited",
+      "allow_package_managers": true,
+      "allow_mcp_servers": false,
+      "allowed_hosts": [
+        "irs.gov",
+        "*.irs.gov",
+        "idaho.gov",
+        "*.idaho.gov",
+        "ssa.gov",
+        "*.ssa.gov",
+        "treasury.gov",
+        "*.treasury.gov",
+        "uscode.house.gov",
+        "ecfr.gov",
+        "*.ecfr.gov",
+        "federalregister.gov",
+        "*.federalregister.gov",
+        "govinfo.gov",
+        "*.govinfo.gov",
+        "law.cornell.edu",
+        "*.law.cornell.edu",
+        "congress.gov",
+        "*.congress.gov",
+        "healthcare.gov",
+        "*.healthcare.gov",
+        "cms.gov",
+        "*.cms.gov",
+        "yourhealthidaho.org",
+        "*.yourhealthidaho.org",
+        "sba.gov",
+        "*.sba.gov",
+        "dol.gov",
+        "*.dol.gov"
+      ]
+    }
+  }
+}
