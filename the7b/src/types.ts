@@ -13,6 +13,8 @@ export interface User {
   is_admin: number;
   mailing_consent: number;
   created_at: string;
+  /** Set for admins only: photos waiting in the queue, for the nav badge. */
+  pending_count?: number;
 }
 
 export interface Objective {
