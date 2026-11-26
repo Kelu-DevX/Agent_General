@@ -190,3 +190,12 @@ describe("pacificShort", async () => {
     expect(pacificShort("garbage")).toBe("garbage");
   });
 });
+
+describe("daylight-saving days", () => {
+  it("starts the day at Sandpoint midnight even when the clocks changed overnight", () => {
+    // Spring forward, Sun 2027-03-14: midnight was still PST (UTC-8).
+    expect(pacificDayStartUtc(new Date("2027-03-14T20:00:00Z"))).toBe("2027-03-14 08:00:00");
+    // Fall back, Sun 2026-11-01: midnight was still PDT (UTC-7).
+    expect(pacificDayStartUtc(new Date("2026-11-01T20:00:00Z"))).toBe("2026-11-01 07:00:00");
+  });
+});

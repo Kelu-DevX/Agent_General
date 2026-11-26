@@ -79,18 +79,27 @@ export interface Standing {
 
 /**
  * Season standings. Admins are left out (no winning your own prize).
- * Ties go to whoever reached the tied total first: the ledger row that
- * brought them to it is their latest one, so earliest latest-row wins.
+ * Ties go to whoever reached the tied total first: for each player, the
+ * earliest ledger row at which their running total equalled their final
+ * total. A grant that was later revoked doesn't move that moment.
  */
 export async function leaderboard(db: D1Database, limit = 100): Promise<Standing[]> {
   const { results } = await db.prepare(
-    `SELECT u.id AS user_id, u.display_name, SUM(l.delta) AS total,
-            MAX(l.created_at) AS last_earned, MAX(l.id) AS last_id
-       FROM points_ledger l JOIN users u ON u.id = l.user_id
-      WHERE u.is_admin = 0
+    `WITH run AS (
+       SELECT user_id, id, created_at,
+              SUM(delta) OVER (PARTITION BY user_id ORDER BY id) AS running
+         FROM points_ledger
+     ), tot AS (
+       SELECT user_id, SUM(delta) AS total FROM points_ledger GROUP BY user_id
+     )
+     SELECT u.id AS user_id, u.display_name, t.total,
+            MIN(r.created_at) AS last_earned, MIN(r.id) AS last_id
+       FROM tot t
+       JOIN users u ON u.id = t.user_id
+       JOIN run r ON r.user_id = t.user_id AND r.running = t.total
+      WHERE u.is_admin = 0 AND t.total > 0
       GROUP BY u.id
-     HAVING SUM(l.delta) > 0
-      ORDER BY total DESC, last_id ASC
+      ORDER BY t.total DESC, last_id ASC
       LIMIT ?`,
   ).bind(limit).all<Standing & { last_id: number }>();
   return results.map(({ last_id: _ignored, ...s }) => s);

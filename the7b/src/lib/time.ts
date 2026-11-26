@@ -25,10 +25,18 @@ export function seasonOver(seasonEnd: string, now: Date = new Date()): boolean {
 
 /** Midnight today in Sandpoint, as a UTC "YYYY-MM-DD HH:MM:SS" string (SQLite CURRENT_TIMESTAMP format). */
 export function pacificDayStartUtc(now: Date = new Date()): string {
-  const { y, m, d, h, mi, s } = parts(now);
-  const offsetMs = Date.UTC(y, m - 1, d, h, mi, s) - Math.floor(now.getTime() / 1000) * 1000;
-  const start = new Date(Date.UTC(y, m - 1, d) - offsetMs);
-  return start.toISOString().slice(0, 19).replace("T", " ");
+  const { y, m, d } = parts(now);
+  const midnightAsUtc = Date.UTC(y, m - 1, d);
+  // Use the UTC offset in force at midnight itself, not now: they differ on daylight-saving days.
+  // offsetAt(t) is Sandpoint wall-clock minus UTC (e.g. -8h in winter). Guess with now's offset,
+  // then correct with the offset at the guessed instant.
+  const offsetAt = (t: number) => {
+    const p = parts(new Date(t));
+    return Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s) - Math.floor(t / 1000) * 1000;
+  };
+  const guess = midnightAsUtc - offsetAt(now.getTime());
+  const start = midnightAsUtc - offsetAt(guess);
+  return new Date(start).toISOString().slice(0, 19).replace("T", " ");
 }
 
 /** "2026-12-06 23:12:00" (UTC, SQLite format) -> "Dec 6, 3:12 PM" in Sandpoint. */

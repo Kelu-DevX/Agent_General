@@ -17,7 +17,7 @@ const app = new Hono<AppEnv>();
 
 const CSP = [
   "default-src 'self'",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
   "style-src 'self' https://fonts.googleapis.com",
   "font-src https://fonts.gstatic.com",
   "script-src 'self'",

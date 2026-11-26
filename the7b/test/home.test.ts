@@ -93,3 +93,9 @@ describe("security headers", () => {
     expect(await res.text()).toContain("Probably out sledding");
   });
 });
+
+describe("upload preview", () => {
+  it("lets the page show a blob: preview of the chosen photo", async () => {
+    expect((await get("/postcards")).headers.get("content-security-policy")).toContain("img-src 'self' data: blob:");
+  });
+});

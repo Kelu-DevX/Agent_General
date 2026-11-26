@@ -53,6 +53,7 @@ pubRoutes.get("/p/:name", async (c) => {
 const PHOTO_NAME = /^[a-z0-9]+-[0-9a-f-]{36}\.jpg$/;
 
 // Approved photos are public. Anything else is visible only to its owner and admins.
+// Short cache so a photo the admin removes stops showing within a minute.
 pubRoutes.get("/photo/:name", async (c) => {
   const name = c.req.param("name");
   if (!PHOTO_NAME.test(name)) return c.notFound();
@@ -68,7 +69,7 @@ pubRoutes.get("/photo/:name", async (c) => {
   return new Response(obj.body, {
     headers: {
       "content-type": "image/jpeg",
-      "cache-control": isPublic ? "public, max-age=3600" : "private, no-store",
+      "cache-control": isPublic ? "public, max-age=60" : "private, no-store",
       "x-content-type-options": "nosniff",
     },
   });

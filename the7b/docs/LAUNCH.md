@@ -76,6 +76,13 @@ Admins are left out of Winter Standings, so you can't win your own prize.
       and they log in with it. That also logs them out everywhere else.
 - [ ] Try an iPhone photo. The page converts it to JPEG before sending.
 
+## 7b. Basic abuse protection (free)
+
+- [ ] 🧑 Cloudflare dashboard → your domain (once the7b.me is on Cloudflare) → Security → WAF →
+      Rate limiting rules → one rule: requests to `/login` or `/signup`, more than 10 per minute from
+      one IP → Block for 10 minutes. The free plan includes one rule, which is all this needs.
+      (Not available on a bare `workers.dev` address, so do it at the domain swap.)
+
 ## 8. Go public
 
 - [ ] 🧑 Post in the Sandpoint Facebook groups.

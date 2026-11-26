@@ -84,3 +84,45 @@ describe("storePhoto", () => {
     expect(containsText(stored, "GPS")).toBe(false);
   });
 });
+
+/** A real-shaped EXIF APP1: little-endian TIFF, IFD0 with Orientation and a GPS pointer, plus GPS text. */
+function exifWithOrientation(v: number): Uint8Array {
+  const tiff = [
+    0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, // II, 42, IFD0 at 8
+    0x02, 0x00, // two entries
+    0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, v, 0x00, 0x00, 0x00, // Orientation = v
+    0x25, 0x88, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00, 0x26, 0x00, 0x00, 0x00, // GPSInfo pointer
+    0x00, 0x00, 0x00, 0x00,
+    ...[..."GPS 48.2766N 116.5533W"].map((c) => c.charCodeAt(0)),
+  ];
+  const payload = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+  const l = payload.length + 2;
+  return Uint8Array.of(0xff, 0xe1, l >> 8, l & 0xff, ...payload);
+}
+function withSegment(seg: Uint8Array): Uint8Array {
+  const base = makeJpeg();
+  const app0End = 4 + ((base[4] << 8) | base[5]);
+  return Uint8Array.of(...base.subarray(0, app0End), ...seg, ...base.subarray(app0End));
+}
+
+describe("orientation", async () => {
+  const { exifOrientation } = await import("../src/lib/photos");
+  it("reads the orientation from a real EXIF block", () => {
+    expect(exifOrientation(exifWithOrientation(6).subarray(4))).toBe(6);
+    expect(exifOrientation(Uint8Array.of(1, 2, 3))).toBe(1);
+  });
+  it("keeps a rotated phone photo upright but carries no GPS", () => {
+    const out = new Uint8Array(stripJpegMetadata(withSegment(exifWithOrientation(6)).slice().buffer));
+    expect(containsText(out, "GPS")).toBe(false);
+    expect(hasMarker(out, 0xe1)).toBe(true);
+    const app0End = 4 + ((out[4] << 8) | out[5]);
+    const app1 = out.subarray(app0End, app0End + 36); // marker + 34-byte length field
+    expect([app1[0], app1[1], app1[2], app1[3]]).toEqual([0xff, 0xe1, 0x00, 0x22]);
+    expect(exifOrientation(app1.subarray(4))).toBe(6);
+    expect(out.length).toBe(makeJpeg().length + 36);
+  });
+  it("adds nothing for an already-upright photo", () => {
+    const out = new Uint8Array(stripJpegMetadata(withSegment(exifWithOrientation(1)).slice().buffer));
+    expect(hasMarker(out, 0xe1)).toBe(false);
+  });
+});

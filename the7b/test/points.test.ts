@@ -135,3 +135,17 @@ describe("leaderboard", () => {
     expect(rows[0]).not.toHaveProperty("email");
   });
 });
+
+describe("leaderboard tiebreak with revocations", () => {
+  it("a grant-and-revoke that nets zero doesn't cost a player their place", async () => {
+    const first = await player();
+    const second = await player();
+    await approveSubmission(db(), await pending(first, 2)); // first reaches 10
+    await approveSubmission(db(), await pending(second, 3)); // second reaches 10, later
+    const s = await pending(first, 4);
+    await approveSubmission(db(), s); // +30 ...
+    await removeSubmission(db(), s); // ... -30: back to 10
+    const rows = (await leaderboard(db(), 10_000)).filter((r) => r.user_id === first || r.user_id === second);
+    expect(rows.map((r) => r.user_id)).toEqual([first, second]);
+  });
+});

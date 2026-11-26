@@ -180,7 +180,7 @@ export function AdminPage(props: {
       <section class="section" id="players">
         <h2 class="section-title">Players ({props.players.length})</h2>
         <p class="small">
-          <a href="/admin/mailing.csv">Download the 7B mail list</a> (only people who said yes).
+          <a href="/admin/mailing.csv">Download 7B mail list</a> (only people who said yes).
         </p>
         <ul class="players">
           {props.players.map((p) => (

@@ -77,7 +77,7 @@ export const COPY = {
     alreadyPending: "That one's already in the mail — hang tight while it gets a look.",
     alreadyStamped: "You've already stamped that one. On to the next!",
     noObjective: "That mission isn't on the board.",
-    forbidden: "This page is just for the 7B mail room.",
+    forbidden: "This page is just for 7B's mail room.",
     notFound: "That page wandered off. Probably out sledding.",
     crossSite: "That form came from somewhere else, so we didn't send it.",
   },

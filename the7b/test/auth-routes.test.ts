@@ -110,3 +110,24 @@ describe("login and logout", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("safeNext (open-redirect guard)", async () => {
+  const { safeNext } = await import("../src/routes/auth");
+  it("keeps plain same-site paths", () => {
+    expect(safeNext("/postcards")).toBe("/postcards");
+    expect(safeNext("/p/Huck%20Hank?x=1#o-2")).toBe("/p/Huck%20Hank?x=1#o-2");
+  });
+  it("refuses anything a browser could turn into another site", () => {
+    for (const bad of ["//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "/ /evil.com", "https://evil.com",
+      "evil.com", "/%09/evil.com".replace("%09", "\t"), "\\\\evil.com", 42, undefined, "/" + "a".repeat(250)]) {
+      expect(safeNext(bad)).toBeUndefined();
+    }
+  });
+  it("won't bounce a fresh login to another site", async () => {
+    const { email } = await signup({ password: "correct horse" });
+    const res = await SELF.fetch(`${BASE}/login`, {
+      method: "POST", body: form({ email, password: "correct horse", next: "/\t/evil.com" }), redirect: "manual",
+    });
+    expect(res.headers.get("location")).toBe("/postcards");
+  });
+});

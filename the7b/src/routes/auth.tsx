@@ -12,11 +12,23 @@ import { Layout, Notice } from "../views/layout";
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 const NAME_RE = /^[A-Za-z0-9 ]{3,24}$/;
 
-/** Only same-site paths: "/x" yes, "//evil" or "http://..." no. */
+/**
+ * Only same-site paths: "/x" yes; "//evil", "/\\evil", "/\t/evil" or "http://..." no.
+ * Browsers drop tabs/newlines and treat backslashes as slashes, so anything with
+ * control characters, spaces or backslashes is refused outright, then the result
+ * must resolve to this same origin.
+ */
 export function safeNext(next: unknown): string | undefined {
-  if (typeof next !== "string") return undefined;
-  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return undefined;
-  return next.slice(0, 200);
+  if (typeof next !== "string" || next.length > 200) return undefined;
+  if (!next.startsWith("/") || /[\x00-\x20\x7f\\]/.test(next)) return undefined;
+  try {
+    const base = "https://7b.invalid";
+    const u = new URL(next, base);
+    if (u.origin !== base) return undefined;
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return undefined;
+  }
 }
 
 export const requireUser: MiddlewareHandler<AppEnv> = async (c, next) => {
