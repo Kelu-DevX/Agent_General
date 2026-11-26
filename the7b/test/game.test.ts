@@ -182,3 +182,11 @@ describe("photo privacy", () => {
 });
 
 void BASE;
+
+describe("pacificShort", async () => {
+  const { pacificShort } = await import("../src/lib/time");
+  it("shows Sandpoint time for the mail room", () => {
+    expect(pacificShort("2026-12-06 23:12:00")).toBe("Dec 6, 3:12 PM");
+    expect(pacificShort("garbage")).toBe("garbage");
+  });
+});

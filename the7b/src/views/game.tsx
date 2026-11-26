@@ -6,7 +6,6 @@ import { Stamp, WallGrid } from "./wall";
 
 function ObjectiveCard(props: {
   o: Objective;
-  n: number;
   user: User | null;
   sub?: Submission;
   over: boolean;
@@ -16,10 +15,7 @@ function ObjectiveCard(props: {
   const state = sub?.status;
   return (
     <li class={`mission${state === "approved" ? " mission-done" : ""}`} id={`o-${o.id}`}>
-      <div class="mission-head">
-        <span class="mission-n">No. {props.n}</span>
-        <Stamp points={o.points} />
-      </div>
+      <Stamp points={o.points} />
       <h3 class="mission-title">{o.title}</h3>
       <p class="mission-desc">{o.description}</p>
 
@@ -68,11 +64,11 @@ export function GamePage(props: {
   return (
     <Layout title={COPY.gameName} user={props.user} nav="postcards">
       <section class="game-hero">
-        <p class="eyebrow">Winter season · through March 31</p>
+        <p class="note">Winter season, now through March 31</p>
         <h1 class="script-title">Postcards</h1>
         <p class="lede">{COPY.game.intro}</p>
         <p>
-          <a class="link-arrow" href="/standings">{COPY.game.standingsTitle} →</a>
+          <a class="link-arrow" href="/standings">See the {COPY.game.standingsTitle}</a>
         </p>
       </section>
 
@@ -80,12 +76,12 @@ export function GamePage(props: {
       {props.sent ? <Notice kind="ok">{COPY.game.sent}</Notice> : null}
       {general ? <Notice kind="err">{props.error!.message}</Notice> : null}
 
-      <ol class="missions">
-        {props.objectives.map((o, i) => (
-          <ObjectiveCard o={o} n={i + 1} user={props.user} sub={props.progress.get(o.id)} over={props.over}
+      <ul class="missions">
+        {props.objectives.map((o) => (
+          <ObjectiveCard o={o} user={props.user} sub={props.progress.get(o.id)} over={props.over}
             error={props.error?.objectiveId === o.id ? props.error.message : undefined} />
         ))}
-      </ol>
+      </ul>
 
       <section class="section" id="wall">
         <h2 class="section-title">{COPY.game.wallTitle}</h2>

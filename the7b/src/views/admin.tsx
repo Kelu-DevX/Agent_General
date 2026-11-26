@@ -1,4 +1,5 @@
 import { photoUrl } from "../lib/queries";
+import { pacificShort as when } from "../lib/time";
 import type { Happening, Objective, User } from "../types";
 import { Layout, Notice } from "./layout";
 
@@ -23,7 +24,6 @@ export interface PlayerRow {
   total: number;
 }
 
-const when = (ts: string) => ts.slice(0, 16).replace("T", " ") + " UTC";
 
 function Btn(props: { action: string; label: string; kind: string }) {
   return (

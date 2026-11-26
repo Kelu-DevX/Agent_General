@@ -63,7 +63,7 @@ export function Layout(props: {
             {user ? link("/me", "Me", "me") : link("/signup", "Join", "me")}
             {user?.is_admin ? (
               <a href="/admin" class={nav === "admin" ? "on" : undefined}>
-                Mail room{user.pending_count ? <span class="badge">{user.pending_count}</span> : null}
+                Mail{user.pending_count ? <span class="badge">{user.pending_count}</span> : null}
               </a>
             ) : null}
           </nav>

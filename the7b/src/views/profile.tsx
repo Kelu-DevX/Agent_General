@@ -32,7 +32,7 @@ export function MePage(props: {
   return (
     <Layout title="My postcards" user={props.user} nav="me">
       <section class="card profile">
-        <p class="eyebrow">Your 7B passport</p>
+        <p class="note">Your 7B passport</p>
         <h1 class="script-title">{props.user.display_name}</h1>
         <p class="total">
           <strong>{props.total}</strong> {COPY.objectivesUnit}
@@ -69,7 +69,7 @@ export function PublicProfilePage(props: {
   return (
     <Layout title={props.name} user={props.viewer} nav="standings">
       <section class="card profile">
-        <p class="eyebrow">Postcards from</p>
+        <p class="note">Postcards from</p>
         <h1 class="script-title">{props.name}</h1>
         <p class="total">
           <strong>{props.total}</strong> {COPY.objectivesUnit}

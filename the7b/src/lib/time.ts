@@ -30,3 +30,12 @@ export function pacificDayStartUtc(now: Date = new Date()): string {
   const start = new Date(Date.UTC(y, m - 1, d) - offsetMs);
   return start.toISOString().slice(0, 19).replace("T", " ");
 }
+
+/** "2026-12-06 23:12:00" (UTC, SQLite format) -> "Dec 6, 3:12 PM" in Sandpoint. */
+export function pacificShort(utc: string): string {
+  const d = new Date(utc.replace(" ", "T") + (utc.endsWith("Z") ? "" : "Z"));
+  if (Number.isNaN(d.getTime())) return utc;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(d);
+}

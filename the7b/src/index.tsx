@@ -1,14 +1,17 @@
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
-import { COPY } from "./copy";
+import { COPY, contactLine } from "./copy";
 import { COOKIE, getSessionUser } from "./lib/auth";
-import { pendingCount } from "./lib/queries";
+import { activeHappenings, pendingCount, wallPage } from "./lib/queries";
+import { getWeather } from "./lib/weather";
 import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { gameRoutes } from "./routes/game";
 import { pubRoutes } from "./routes/pub";
 import type { AppEnv } from "./types";
+import { HomePage } from "./views/home";
 import { Layout, Notice } from "./views/layout";
+import { TermsPage } from "./views/terms";
 
 const app = new Hono<AppEnv>();
 
@@ -62,13 +65,19 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.get("/", (c) =>
-  c.html(
-    <Layout user={c.get("user")} nav="home">
-      <h1>7B</h1>
-    </Layout>,
-  ),
-);
+app.get("/", async (c) => {
+  const [weather, happenings, recent] = await Promise.all([
+    getWeather(),
+    activeHappenings(c.env.DB),
+    wallPage(c.env.DB, 1, 6),
+  ]);
+  return c.html(
+    <HomePage user={c.get("user")} weather={weather} happenings={happenings} recent={recent.cards}
+      siteUrl={c.env.SITE_URL} />,
+  );
+});
+
+app.get("/terms", (c) => c.html(<TermsPage user={c.get("user")} contact={contactLine(c.env.CONTACT_EMAIL)} />));
 
 app.route("/", authRoutes);
 app.route("/", gameRoutes);

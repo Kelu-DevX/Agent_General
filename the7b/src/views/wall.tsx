@@ -60,8 +60,8 @@ export function Pager(props: { base: string; page: number; hasMore: boolean }) {
   if (props.page <= 1 && !props.hasMore) return null;
   return (
     <nav class="pager" aria-label="Pages">
-      {props.page > 1 ? <a class="btn btn-ghost" href={`${props.base}?page=${props.page - 1}`}>← Newer</a> : <span />}
-      {props.hasMore ? <a class="btn btn-ghost" href={`${props.base}?page=${props.page + 1}`}>Older →</a> : <span />}
+      {props.page > 1 ? <a class="btn btn-ghost" href={`${props.base}?page=${props.page - 1}`}>Newer postcards</a> : <span />}
+      {props.hasMore ? <a class="btn btn-ghost" href={`${props.base}?page=${props.page + 1}`}>Older postcards</a> : <span />}
     </nav>
   );
 }
