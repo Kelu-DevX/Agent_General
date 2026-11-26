@@ -1,0 +1,437 @@
+7B Winter Pilot Implementation Plan
+   For agentic workers: REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
+   (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
+   checkbox ( - [ ] ) syntax for tracking.
+
+Goal: Ship the 7B winter pilot — a mobile-first Sandpoint handbook site with the "Postcards" 5-objective
+photo game — on Cloudflare's free tier.
+
+Architecture: One Cloudflare Worker (Hono + Hono JSX server-rendered pages, small amount of client
+JS), D1 (SQLite) for data, R2 for photos. Points are a ledger (grants/revocations), totals computed. All
+moderation flows through an admin approval queue.
+
+Tech Stack: TypeScript, Hono (with JSX), Cloudflare Workers + D1 + R2, Wrangler, Vitest with
+@cloudflare/vitest-pool-workers . No other runtime dependencies without need.
+
+Spec: docs/design.md
+
+
+
+Global Constraints
+
+   Hosting cost: $0/month. Free tiers only (Workers, D1, R2). No paid APIs, no email service.
+
+   Brand copy: site is "7B", game is "Postcards", points are "stamps". Warm, wholesome, postcard-
+   vintage tone; never corporate, never kids'-toy.
+
+   Domain is config ( SITE_URL var); everything runs on the temporary *.workers.dev URL until Luke
+   buys the7b.me.
+
+   Privacy: public pages show display names only — never emails, never location. Photos must carry
+   no EXIF/GPS when stored.
+
+   Uploads: JPEG only, max 2,500,000 bytes, max 20 uploads per user per day.
+
+   Signup requires two checkboxes: age 13+ / photo-rights acknowledgment (combined into terms
+   agreement) and an optional mailing-list consent checkbox (unchecked by default).
+
+   Season: submissions accepted through 2027-03-31 (config SEASON_END ).
+
+   Mobile-first: every page usable on a ~380px viewport; admin fully operable from a phone.
+
+   Nothing deploys live without Luke's explicit go-ahead (deploy is a checklist item, not a task step).
+
+
+
+Review Focus
+
+   Duplicate email or display name at signup → friendly inline error, not a 500. (Test added to Task 4.)
+
+   Non-JPEG or >2.5MB upload sent directly to the API (bypassing client JS) → rejected with a clear
+   message, nothing written to R2. (Test in Task 6.)
+    JPEG with EXIF/GPS uploaded directly to the API → stored object has EXIF segments stripped.
+    (Test in Task 6.)
+
+    Approve called twice on one submission, or remove after approve → points granted at most once,
+    removal revokes exactly once; no double-count. (Tests in Task 7.)
+
+    Logged-out user POSTs a submission or opens /admin ; non-admin opens /admin → redirect to
+    login / 403, never a crash or silent success. (Tests in Tasks 6–7.)
+
+
+
+
+Task 1: Scaffold — Worker, Hono, tests, repo
+
+Files:
+
+    Create: package.json , wrangler.toml , tsconfig.json , vitest.config.ts , src/index.tsx ,
+    src/views/layout.tsx , public/styles.css , .gitignore , README.md
+
+    Test: test/smoke.test.ts
+
+Interfaces:
+
+    Produces: Hono app exported from src/index.tsx (default export for Workers); Layout JSX
+    component ({ title, children }) ; bindings DB (D1), PHOTOS (R2), vars SITE_URL ,
+    SEASON_END declared in wrangler.toml and typed in src/types.ts as Env .
+
+    [ ] Step 1: Init repo and scaffold. git init in /home/claude/7b ; commit the existing docs/ . npm
+    create cloudflare@latest is interactive — instead hand-write package.json (scripts: dev ,
+    deploy , test ), install hono , wrangler , vitest , @cloudflare/vitest-pool-workers ,
+    typescript . wrangler.toml : D1 binding DB (database the7b ), R2 binding PHOTOS (bucket
+    the7b-photos ), vars SITE_URL , SEASON_END="2027-03-31" , assets dir public/ .
+
+    [ ] Step 2: Write failing smoke test test/smoke.test.ts : GET / returns 200 and body contains
+    7B .
+
+    [ ] Step 3: Run test, expect FAIL ( npm test ).
+
+    [ ] Step 4: Implement src/index.tsx Hono app with GET / rendering Layout with an h1 "7B";
+    Layout links /styles.css , sets viewport meta.
+
+    [ ] Step 5: Run test, expect PASS.
+
+    [ ] Step 6: Commit chore: scaffold 7B worker with hono + vitest .
+
+
+Task 2: Database schema + migrations
+
+Files:
+
+    Create: migrations/0001_init.sql , src/types.ts (row types), test/schema.test.ts
+
+Interfaces:
+    Produces tables: users(id INTEGER PK, email TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    display_name TEXT UNIQUE NOT NULL COLLATE NOCASE, pass_hash TEXT NOT NULL, is_admin
+    INTEGER DEFAULT 0, mailing_consent INTEGER DEFAULT 0, created_at TEXT DEFAULT
+    CURRENT_TIMESTAMP) ; sessions(token TEXT PK, user_id INTEGER NOT NULL REFERENCES
+    users(id), expires_at TEXT NOT NULL) ; objectives(id INTEGER PK, title TEXT,
+    description TEXT, points INTEGER, sort INTEGER, active INTEGER DEFAULT 1) ;
+    submissions(id INTEGER PK, user_id INTEGER NOT NULL, objective_id INTEGER NOT NULL,
+    photo_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN
+    ('pending','approved','rejected','removed')), reject_reason TEXT, featured INTEGER
+    DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP, decided_at TEXT) ;
+    points_ledger(id INTEGER PK, user_id INTEGER NOT NULL, submission_id INTEGER, delta
+    INTEGER NOT NULL, reason TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP) ;
+    happenings(id INTEGER PK, text TEXT NOT NULL, date_label TEXT, sort INTEGER DEFAULT
+    0, active INTEGER DEFAULT 1) .
+
+    Partial unique indexes: one approved submission per (user_id, objective_id); one pending per
+    (user_id, objective_id).
+
+    Seed: the 5 winter objectives from the spec, exact titles/points.
+
+    [ ] Step 1: Write failing test test/schema.test.ts : applies migrations (vitest-pool-workers d1
+    migrations setting); asserts inserting two approved submissions for same user+objective throws;
+    two pending throws; a pending + an approved coexists; 5 objectives seeded with points
+    20/10/10/30/30.
+
+    [ ] Step 2: Run test, expect FAIL.
+
+    [ ] Step 3: Write migrations/0001_init.sql (schema above + objective seed rows from spec
+    §Winter objectives).
+
+    [ ] Step 4: Run test, expect PASS.
+
+    [ ] Step 5: Commit feat: d1 schema, constraints, winter objectives seed .
+
+
+Task 3: Auth library (hashing + sessions)
+
+Files:
+
+    Create: src/lib/auth.ts
+
+    Test: test/auth.test.ts
+
+Interfaces:
+
+    Produces: hashPassword(pw: string): Promise<string> (PBKDF2-SHA256 via WebCrypto,
+    100_000 iterations, random 16-byte salt, output pbkdf2$<iter>$<saltB64>$<hashB64> );
+    verifyPassword(pw: string, stored: string): Promise<boolean> ; createSession(db:
+    D1Database, userId: number): Promise<string> (32-byte random token, 30-day expiry);
+    getSessionUser(db: D1Database, token: string | undefined): Promise<User | null> (null
+    if missing/expired); sessionCookie(token: string): string (httpOnly, Secure, SameSite=Lax,
+    Path=/, Max-Age 30d) and clearSessionCookie(): string .
+
+    Note: bcrypt does NOT run on Workers; WebCrypto PBKDF2 is the pinned choice.
+
+    [ ] Step 1: Write failing tests: round-trip hash/verify true; wrong password false; tampered stored
+    string false; getSessionUser returns user for fresh session, null for expired (insert with past
+    expires_at ), null for unknown token.
+
+    [ ] Step 2: Run tests, expect FAIL.
+
+    [ ] Step 3: Implement src/lib/auth.ts .
+
+    [ ] Step 4: Run tests, expect PASS.
+
+    [ ] Step 5: Commit feat: pbkdf2 password hashing and d1 sessions .
+
+
+Task 4: Signup / login / logout routes + pages
+
+Files:
+
+    Create: src/routes/auth.ts , src/views/auth.tsx (signup + login forms)
+
+    Modify: src/index.tsx (mount routes, attach c.get('user') middleware)
+
+    Test: test/auth-routes.test.ts
+
+Interfaces:
+
+    Consumes: Task 3 functions.
+
+    Produces: POST /signup (fields email , display_name , password , agree required checkbox,
+    mailing_consent optional) → sets session cookie, redirects /postcards ; POST /login ; POST
+    /logout ; middleware requireUser (redirect /login ) and requireAdmin (403) exported from
+    src/routes/auth.ts .
+
+    Validation: email format, display_name 3–24 chars letters/numbers/spaces, password ≥8 chars,
+    agree must be present.
+
+    [ ] Step 1: Write failing tests: signup happy path sets cookie + creates user with mailing_consent
+    as submitted; duplicate email returns 400 with form re-rendered containing message "already have
+    an account" (not 500); duplicate display name → 400 "name's taken"; missing agree → 400; login
+    wrong password → 401 message; logout clears cookie.
+
+    [ ] Step 2: Run tests, expect FAIL.
+
+    [ ] Step 3: Implement routes + minimal warm-toned forms (copy: signup heading "Join the 7B",
+    agree label "I'm 13 or older and any photos I post are mine and OK to show publicly", consent label
+    "Send me occasional 7B mail — no spam, ever").
+
+    [ ] Step 4: Run tests, expect PASS.
+    [ ] Step 5: Commit feat: signup, login, logout with validation .
+
+
+Task 5: Photo pipeline — EXIF stripping + R2 storage
+
+Files:
+
+    Create: src/lib/photos.ts , public/upload.js (client resize)
+
+    Test: test/photos.test.ts (+ fixture test/fixtures/gps.jpg — generate in-test or commit a
+    tiny EXIF-GPS JPEG)
+
+Interfaces:
+
+    Produces: stripJpegMetadata(bytes: ArrayBuffer): ArrayBuffer — pure byte-level JPEG
+    segment walk dropping APP1/APP2…APP15 and COM segments (keeps APP0/JFIF), no image
+    decode; validateJpeg(bytes: ArrayBuffer): string | null — returns error string for non-
+    JPEG magic ( FF D8 FF ) or >2,500,000 bytes, else null; storePhoto(env: Env, bytes:
+    ArrayBuffer): Promise<string> — strips, puts to R2 under key photos/<ulid>.jpg with
+    contentType: image/jpeg , returns key.
+
+    public/upload.js : on file select, draws image to canvas capped at 1600px long edge, exports
+    JPEG q0.82, replaces form file payload (canvas export inherently drops EXIF; server strip is the
+    backstop).
+
+    [ ] Step 1: Write failing tests: validateJpeg rejects PNG magic bytes and oversize buffer, accepts
+    small JPEG; stripJpegMetadata on a JPEG containing an APP1/EXIF segment returns bytes with
+    no 0xFFE1 marker and intact FFD8 / FFD9 ; storePhoto result key retrievable from R2 in test env
+    and retrieved bytes contain no APP1.
+
+    [ ] Step 2: Run tests, expect FAIL.
+
+    [ ] Step 3: Implement src/lib/photos.ts (segment walk: read marker/length pairs until SOS, copy
+    allowed segments, then copy rest verbatim).
+
+    [ ] Step 4: Run tests, expect PASS.
+
+    [ ] Step 5: Write public/upload.js (no test; verified in Task 9 visual pass).
+
+    [ ] Step 6: Commit feat: jpeg validation, metadata stripping, r2 storage, client
+    resize .
+
+
+Task 6: Postcards game — objectives page, submission flow
+
+Files:
+
+    Create: src/routes/game.ts , src/views/game.tsx
+
+    Modify: src/index.tsx
+
+    Test: test/game.test.ts
+
+Interfaces:
+    Consumes: requireUser , storePhoto , validateJpeg , schema constraints.
+
+    Produces: GET /postcards (objective cards w/ points as "stamps", upload button each, the public
+    wall below, leaderboard link); POST /postcards/submit multipart ( objective_id , photo ) →
+    creates pending submission; GET /photo/:key streams from R2 (public, cache headers).
+
+    Rules enforced in route: logged-in only; season not ended ( SEASON_END ); rejects when a pending
+    or approved submission already exists for that objective (friendly message: "That one's already in
+    the mail" / "You've already stamped that one"); ≤20 uploads/day per user (count submissions
+    created today).
+
+    [ ] Step 1: Write failing tests: anonymous POST → 302 to /login ; valid submit creates pending
+    row + R2 object; second submit same objective while pending → 400 with message; submit to
+    objective with approved submission → 400; 21st submit of the day → 429; non-JPEG body → 400
+    and no R2 object (list bucket in test); submit after SEASON_END (override var in test) → 400
+    "season's wrapped".
+
+    [ ] Step 2: Run tests, expect FAIL.
+
+    [ ] Step 3: Implement routes + page (rejected submissions: user may resubmit — allowed by
+    constraint design; show rejection reason on their card).
+
+    [ ] Step 4: Run tests, expect PASS.
+
+    [ ] Step 5: Commit feat: postcards objectives and submission flow .
+
+
+Task 7: Admin — queue, decisions, ledger, happenings, resets
+
+Files:
+
+    Create: src/routes/admin.ts , src/views/admin.tsx , src/lib/points.ts
+
+    Modify: src/index.tsx
+
+    Test: test/admin.test.ts , test/points.test.ts
+
+Interfaces:
+
+    Consumes: requireAdmin , schema.
+
+    Produces src/lib/points.ts : approveSubmission(db, id) — sets status approved +
+    decided_at , inserts ledger +objective.points reason approve ; idempotent (no-op unless
+    current status is pending ); rejectSubmission(db, id, reason?) ; removeSubmission(db, id)
+    — only from approved , inserts compensating -points ledger rows for its approve and featured
+    grants, status removed ; featureSubmission(db, id) — +25 reason featured , sets
+    featured=1 , no-op if already featured; leaderboard(db): Promise<{display_name, total,
+    last_earned}[]> — sum ledger grouped by user, order total DESC, last_earned ASC (earliest
+    to reach the tied total wins); userTotals(db, userId) .
+    Produces routes: GET /admin (pending queue with photos, count badge, happenings editor, user
+    list); POST /admin/submissions/:id/approve|reject|remove|feature ; POST
+    /admin/happenings (create), POST /admin/happenings/:id (edit text/date_label/sort/active);
+    POST /admin/users/:id/temp-password → generates 10-char temp password, stores hash,
+    displays it once to admin.
+
+    [ ] Step 1: Write failing points tests: approve grants exactly objective points; double approve grants
+    once; reject grants nothing; remove after approve nets user to 0 including featured bonus; feature
+    adds 25 and is idempotent; leaderboard orders by total then earliest last_earned .
+
+    [ ] Step 2: Run, expect FAIL.
+
+    [ ] Step 3: Implement src/lib/points.ts (status transitions guarded in one SQL UPDATE …
+    WHERE status='pending' pattern; ledger insert only when the UPDATE changed a row).
+
+    [ ] Step 4: Run, expect PASS.
+
+    [ ] Step 5: Write failing admin route tests: non-admin GET /admin → 403; admin approve endpoint
+    flips status and wall shows photo; temp-password response contains a password that then logs in.
+
+    [ ] Step 6: Run, expect FAIL; implement routes + phone-first admin page; run, expect PASS.
+
+    [ ] Step 7: Commit feat: admin queue, points ledger, happenings, temp passwords .
+
+
+Task 8: Wall, leaderboard, profile
+
+Files:
+
+    Create: src/routes/pub.ts , src/views/wall.tsx , src/views/profile.tsx
+
+    Modify: src/views/game.tsx (embed wall), src/index.tsx
+
+    Test: test/pub.test.ts
+
+Interfaces:
+
+    Consumes: leaderboard , userTotals .
+
+    Produces: wall partial (approved submissions newest-first: photo, display name, objective title,
+    stamp badge, "Featured" ribbon when featured=1 ; paginated 24/page); GET /leaderboard ; GET
+    /me (requireUser: display name, total stamps, per-objective status, finisher badge when all 5 active
+    objectives have an approved submission).
+
+    [ ] Step 1: Write failing tests: wall shows approved only (not pending/rejected/removed) and shows
+    display name never email; leaderboard page renders totals in ledger order; /me shows finisher
+    badge only when all 5 approved.
+
+    [ ] Step 2: Run, expect FAIL.
+
+    [ ] Step 3: Implement.
+
+    [ ] Step 4: Run, expect PASS.
+    [ ] Step 5: Commit feat: postcard wall, leaderboard, profile with finisher badge .
+
+
+Task 9: Home page, weather, terms, visual polish
+
+Files:
+
+    Create: src/views/home.tsx , src/views/terms.tsx , src/lib/weather.ts
+
+    Modify: public/styles.css , src/views/layout.tsx , src/index.tsx
+
+    Test: test/home.test.ts
+
+Interfaces:
+
+    Consumes: happenings table, wall partial.
+
+    Produces: getWeather(): Promise<{tempF: number, desc: string} | null> using Open-Meteo
+    (free, keyless; Sandpoint 48.2766, -116.5533; cf: { cacheTtl: 1800 } ; returns null on any failure
+    — home renders fine without it); GET / full home (hero + headline, weather chip, "What's going on
+    in 7B" list, recent postcards strip, "Play Postcards" CTA); GET /terms with the spec's plain-
+    language terms + privacy copy (photo rights, removal rights, 13+, winner contacted by email,
+    display-name-only, "sponsored ≠ recommendation" clause pre-staged, emails never sold).
+
+    Headline placeholder: "Greetings from the 7B." flagged for Luke's edit before launch.
+
+    [ ] Step 1: Write failing tests: / renders happenings items and CTA; weather fetch failure (mock
+    fetch rejecting) still renders 200; /terms contains "13" and "sponsored".
+
+    [ ] Step 2: Run, expect FAIL.
+
+    [ ] Step 3: Implement, then the polish pass per spec brand feel: vintage-postcard aesthetic (warm
+    cream/evergreen/stamp-red palette, postcard-frame photo cards, stamp-shaped point badges),
+    mobile-first, no template-default look. Check pages rendered (local wrangler dev screenshot or
+    artifact-emulator-style check) before calling done.
+
+    [ ] Step 4: Run tests, expect PASS.
+
+    [ ] Step 5: Commit feat: home, weather, terms, postcard visual theme .
+
+
+Task 10: Full-suite check + launch checklist doc
+
+Files:
+
+    Create: docs/LAUNCH.md
+
+    Test: whole suite
+
+    [ ] Step 1: Run entire test suite; all green. Fix anything red.
+
+    [ ] Step 2: Write docs/LAUNCH.md : create GitHub repo the7b + push; wrangler d1 create the7b
+    / r2 bucket create the7b-photos ; apply migrations; deploy to workers.dev; set Luke's account
+    admin ( wrangler d1 execute the7b --command "UPDATE users SET is_admin=1 WHERE
+  email='...'" ); Luke seeds happenings; Luke + 1–2 friendlies run the full loop; headline copy
+  review; Facebook posts; domain swap steps for when the7b.me is bought; mailer is a separate
+  design task.
+
+  [ ] Step 3: Commit docs: launch checklist . STOP — deployment and repo publication require
+  Luke's explicit go-ahead.
+
+
+
+
+Self-review notes
+
+  Spec coverage: every spec section maps to a task (brand §→9, pages §→4/6/7/8/9, objectives
+  §→2, flow §→4/5/6/7, legal §→4/9, rules §→2/6/7, stack §→1, provisioning/launch §→10).
+  Deferred items correctly absent.
+
+  Type consistency pass done ( storePhoto / stripJpegMetadata / leaderboard names used
+  consistently across tasks).
+
+  Review Focus items each have an owning test (Tasks 4, 6, 6, 7, 6/7).
+

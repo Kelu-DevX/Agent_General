@@ -1,0 +1,26 @@
+name = "the7b"
+main = "src/index.tsx"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./public"
+
+[vars]
+# Domain is config. Swap to "https://the7b.me" once the domain is bought.
+SITE_URL = "https://the7b.workers.dev"
+# Last day (Pacific time) submissions are accepted.
+SEASON_END = "2027-03-31"
+# Shown in "forgot password" copy. Leave empty until there's an address to share.
+CONTACT_EMAIL = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "the7b"
+# Replaced on deploy day with the id `wrangler d1 create the7b` prints.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "the7b-photos"
