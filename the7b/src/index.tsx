@@ -3,6 +3,7 @@ import { getCookie } from "hono/cookie";
 import { COPY } from "./copy";
 import { COOKIE, getSessionUser } from "./lib/auth";
 import { pendingCount } from "./lib/queries";
+import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { gameRoutes } from "./routes/game";
 import { pubRoutes } from "./routes/pub";
@@ -72,6 +73,7 @@ app.get("/", (c) =>
 app.route("/", authRoutes);
 app.route("/", gameRoutes);
 app.route("/", pubRoutes);
+app.route("/", adminRoutes);
 
 app.notFound((c) =>
   c.html(
